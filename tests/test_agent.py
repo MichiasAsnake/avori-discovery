@@ -154,6 +154,21 @@ class AgentModuleTests(unittest.TestCase):
         self.assertEqual(payload["products"][0]["product_id"], "p1")
         self.assertGreater(payload["products"][0]["score"], 0)
 
+    def test_chat_with_agent_reuses_or_creates_session(self):
+        import agent
+
+        session = object()
+        with (
+            patch.object(agent, "_create_chat_session", return_value=session) as mock_session_factory,
+            patch.object(agent.Runner, "run_sync", return_value=SimpleNamespace(final_output="Promising niche")) as mock_run_sync,
+        ):
+            payload = json.loads(agent.chat_with_agent("Assess this product", "browser-session"))
+
+        mock_session_factory.assert_called_once_with("browser-session")
+        self.assertIs(mock_run_sync.call_args.kwargs["session"], session)
+        self.assertEqual(payload["reply"], "Promising niche")
+        self.assertEqual(payload["session_id"], "browser-session")
+
 
 if __name__ == "__main__":
     unittest.main()

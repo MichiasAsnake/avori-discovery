@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from agent import (
     add_to_watchlist,
+    chat_with_agent,
     get_product_detail,
     get_watchlist,
     refresh_watchlist_tracking,
@@ -38,6 +39,11 @@ class WatchlistEntryRequest(BaseModel):
     sold_count: int | None = None
     review_count: int | None = None
     price: float | None = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
 
 
 def _parse_json_payload(raw_payload: str) -> dict[str, Any]:
@@ -106,6 +112,11 @@ def products_search(keyword: str):
 @app.get("/products/{product_id}")
 def products_detail(product_id: str):
     return _parse_json_payload(get_product_detail(product_id))
+
+
+@app.post("/chat")
+def chat(request: ChatRequest):
+    return _parse_json_payload(chat_with_agent(request.message, request.session_id))
 
 
 @app.get("/watchlist")

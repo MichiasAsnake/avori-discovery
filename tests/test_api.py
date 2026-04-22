@@ -49,6 +49,16 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["keyword"], "travel bag")
 
+    @patch("app.chat_with_agent")
+    def test_chat_endpoint_returns_reply(self, mock_chat_with_agent):
+        mock_chat_with_agent.return_value = '{"reply": "Strong candidate", "session_id": "session-1"}'
+
+        response = self.client.post("/chat", json={"message": "Assess this candidate", "session_id": "session-1"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["reply"], "Strong candidate")
+        self.assertEqual(response.json()["session_id"], "session-1")
+
     @patch("app.add_to_watchlist")
     def test_watchlist_add_posts_entry(self, mock_add_to_watchlist):
         mock_add_to_watchlist.return_value = '{"status": "saved", "entry": {"product_id": "p1"}}'

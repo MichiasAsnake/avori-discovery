@@ -1,0 +1,18 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "experimentalServices": {
+    "web": {
+      "entrypoint": "web",
+      "routePrefix": "/"
+    },
+    "api": {
+      "entrypoint": "app.py",
+      "routePrefix": "/api"
+    }
+  },
+  "functions": {
+    "app.py": {
+      "excludeFiles": "{tests/**,docs/**,web/**,.worktrees/**,__pycache__/**,**/*.pyc}"
+    }
+  }
+}

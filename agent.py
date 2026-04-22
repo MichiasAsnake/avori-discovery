@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import date
+from uuid import uuid4
 
 from agents import Agent, Runner, SQLiteSession, function_tool
 
@@ -96,6 +97,14 @@ def refresh_watchlist_tracking() -> str:
     return json.dumps(refresh_tracked_watchlist(), indent=2)
 
 
+def chat_with_agent(message: str, session_id: str | None = None) -> str:
+    """Run a browser-facing chat turn and return the reply with a stable session id."""
+    resolved_session_id = session_id or f"web-{uuid4().hex}"
+    session = _create_chat_session(resolved_session_id)
+    result = Runner.run_sync(agent, message, session=session)
+    return json.dumps({"reply": result.final_output, "session_id": resolved_session_id}, indent=2)
+
+
 agent = Agent(
     name="Avori Discovery Agent",
     model=AGENT_MODEL,
@@ -120,6 +129,7 @@ Avori categories: travel bags, organizers, jewelry cases, desk organizers, tech 
         function_tool(get_watchlist),
         function_tool(remove_from_watchlist),
         function_tool(refresh_watchlist_tracking),
+        function_tool(chat_with_agent),
     ],
 )
 
