@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
-from api.index import app
+from app import app
 
 
 class ApiTests(unittest.TestCase):
@@ -18,7 +18,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(payload["vercel_ready"])
 
-    @patch("api.index.run_discovery")
+    @patch("app.run_discovery")
     def test_discovery_run_returns_agent_payload(self, mock_run_discovery):
         mock_run_discovery.return_value = '{"candidate_count": 1, "products": [{"product_id": "p1"}]}'
 
@@ -27,7 +27,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["candidate_count"], 1)
 
-    @patch("api.index.search_products")
+    @patch("app.search_products")
     def test_products_search_returns_payload(self, mock_search_products):
         mock_search_products.return_value = '{"keyword": "travel bag", "result_count": 1, "products": [{"product_id": "p1"}]}'
 
@@ -36,7 +36,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["keyword"], "travel bag")
 
-    @patch("api.index.add_to_watchlist")
+    @patch("app.add_to_watchlist")
     def test_watchlist_add_posts_entry(self, mock_add_to_watchlist):
         mock_add_to_watchlist.return_value = '{"status": "saved", "entry": {"product_id": "p1"}}'
 

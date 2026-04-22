@@ -8,10 +8,8 @@ This repo is prepared for Vercel as a Python API project.
 
 ### What deploys
 
-- `api/index.py` exposes a FastAPI wrapper for the discovery workflow
-- `/` rewrites to `/api`
-- `/health` rewrites to `/api/health`
-- `/docs` rewrites to `/api/docs`
+- `app.py` is the FastAPI entrypoint Vercel detects automatically
+- `/`, `/health`, `/docs`, and the rest of the API routes are served directly by FastAPI
 
 ### What stays local
 
@@ -34,17 +32,17 @@ Set these in Vercel Project Settings:
 1. Import the GitHub repo into Vercel
 2. Keep the root directory as the repository root
 3. Add the environment variables above
-4. Deploy
+4. Deploy without a custom build command or output directory
 
 ### API endpoints
 
 - `GET /health`
-- `POST /api/discovery/run`
-- `GET /api/products/search?keyword=travel+bag`
-- `GET /api/products/{product_id}`
-- `GET /api/watchlist`
-- `POST /api/watchlist`
-- `DELETE /api/watchlist/{product_id}`
+- `POST /discovery/run`
+- `GET /products/search?keyword=travel+bag`
+- `GET /products/{product_id}`
+- `GET /watchlist`
+- `POST /watchlist`
+- `DELETE /watchlist/{product_id}`
 
 ### Persistence note
 
