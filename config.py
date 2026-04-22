@@ -10,7 +10,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "output"
+DEFAULT_DATA_DIR = Path("/tmp/avori-discovery") if os.getenv("VERCEL") else BASE_DIR / "output"
+DATA_DIR = Path(os.getenv("AVORI_DATA_DIR", str(DEFAULT_DATA_DIR)))
+OUTPUT_DIR = DATA_DIR
 REGION = os.getenv("AVORI_REGION", "US")
 LANG = os.getenv("AVORI_LANG", "en")
 SEARCH_COUNT = int(os.getenv("AVORI_SEARCH_COUNT", "20"))

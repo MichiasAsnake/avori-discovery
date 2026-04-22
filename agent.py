@@ -13,7 +13,7 @@ from avori_discovery import (
     _extract_suggested_keywords,
     _normalize_shop_product,
 )
-from config import LANG, REGION, SEED_TERMS
+from config import LANG, OUTPUT_DIR, REGION, SEED_TERMS
 from endpoints.detail import fetch_product_detail
 from endpoints.search import fetch_search_products_list, fetch_search_word_suggestion
 from scorer import rank_products
@@ -22,8 +22,8 @@ from scorer import rank_products
 RESULT_LIMIT = 20
 AGENT_SEED_TERM_LIMIT = 5
 AGENT_KEYWORD_LIMIT = 10
-WATCHLIST_PATH = Path(__file__).resolve().parent / "output" / "watchlist.json"
-CHAT_SESSION_DB_PATH = Path(__file__).resolve().parent / "output" / "agent_sessions.sqlite3"
+WATCHLIST_PATH = OUTPUT_DIR / "watchlist.json"
+CHAT_SESSION_DB_PATH = OUTPUT_DIR / "agent_sessions.sqlite3"
 
 
 def _serialize_products(products, limit=RESULT_LIMIT):
