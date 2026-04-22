@@ -16,10 +16,17 @@ OUTPUT_DIR = DATA_DIR
 REGION = os.getenv("AVORI_REGION", "US")
 LANG = os.getenv("AVORI_LANG", "en")
 SEARCH_COUNT = int(os.getenv("AVORI_SEARCH_COUNT", "20"))
+SEARCH_PAGE_COUNT = int(os.getenv("AVORI_SEARCH_PAGE_COUNT", "3"))
 HOT_COUNT = int(os.getenv("AVORI_HOT_COUNT", "20"))
 TIKHUB_API_KEY = os.getenv("TIKHUB_API_KEY", "").strip()
 DISCOVERED_SELLER_LIMIT = int(os.getenv("AVORI_DISCOVERED_SELLER_LIMIT", "20"))
 MAX_KEYWORDS = int(os.getenv("AVORI_MAX_KEYWORDS", "20"))
+DETAIL_CONCURRENCY = int(os.getenv("AVORI_DETAIL_CONCURRENCY", "8"))
+KEYWORD_CONCURRENCY = int(os.getenv("AVORI_KEYWORD_CONCURRENCY", "6"))
+AGENT_MODEL = os.getenv("AVORI_AGENT_MODEL", "gpt-4o-mini").strip() or "gpt-4o-mini"
+DASHBOARD_PRICE_MAX = float(os.getenv("AVORI_DASHBOARD_PRICE_MAX", "200"))
+TRACKING_GRADUATION_SOLD_COUNT = int(os.getenv("AVORI_TRACKING_GRADUATION_SOLD_COUNT", "5000"))
+TIKTOK_SHOP_BASE_URL = os.getenv("AVORI_TIKTOK_SHOP_BASE_URL", "https://shop.tiktok.com")
 SELLER_IDS = [
     seller_id.strip()
     for seller_id in os.getenv("AVORI_SELLER_IDS", "7495150558072178725").split(",")

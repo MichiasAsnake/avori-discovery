@@ -4,3 +4,6 @@ openai-agents
 streamlit
 watchdog
 fastapi
+httpx
+pandas
+uvicorn

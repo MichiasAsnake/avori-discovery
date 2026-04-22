@@ -18,14 +18,27 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(payload["status"], "ok")
         self.assertTrue(payload["vercel_ready"])
 
-    @patch("app.run_discovery")
-    def test_discovery_run_returns_agent_payload(self, mock_run_discovery):
-        mock_run_discovery.return_value = '{"candidate_count": 1, "products": [{"product_id": "p1"}]}'
+    @patch("app._run_discovery_job")
+    @patch("app.create_discovery_job")
+    @patch("app.uuid4")
+    def test_discovery_run_returns_job_payload(self, mock_uuid4, mock_create_discovery_job, _mock_run_discovery_job):
+        mock_uuid4.return_value = type("UUID", (), {"hex": "job-123"})()
+        mock_create_discovery_job.return_value = {"job_id": "job-123", "status": "queued"}
 
         response = self.client.post("/discovery/run")
 
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.json()["job_id"], "job-123")
+        self.assertEqual(response.json()["status"], "queued")
+
+    @patch("app.get_discovery_job")
+    def test_discovery_status_returns_job_payload(self, mock_get_discovery_job):
+        mock_get_discovery_job.return_value = {"job_id": "job-123", "status": "completed", "payload": {"candidate_count": 1}}
+
+        response = self.client.get("/discovery/jobs/job-123")
+
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["candidate_count"], 1)
+        self.assertEqual(response.json()["status"], "completed")
 
     @patch("app.search_products")
     def test_products_search_returns_payload(self, mock_search_products):
@@ -42,7 +55,7 @@ class ApiTests(unittest.TestCase):
 
         response = self.client.post(
             "/watchlist",
-            json={"product_id": "p1", "title": "Travel Case", "reason": "Strong candidate"},
+            json={"product_id": "p1", "title": "Travel Case", "reason": "Strong candidate", "track": True, "score": 91.2},
         )
 
         self.assertEqual(response.status_code, 200)
