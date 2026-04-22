@@ -1,0 +1,40 @@
+name: Daily Discovery
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 15 * * *"
+
+jobs:
+  run-discovery:
+    runs-on: ubuntu-latest
+    env:
+      TIKHUB_API_KEY: ${{ secrets.TIKHUB_API_KEY }}
+      AVORI_DATA_DIR: output
+      AVORI_REGION: ${{ vars.AVORI_REGION || 'US' }}
+      AVORI_LANG: ${{ vars.AVORI_LANG || 'en' }}
+      AVORI_SEED_TERMS: ${{ vars.AVORI_SEED_TERMS || 'travel,organizer,bag,makeup,jewelry,desk,packing' }}
+      AVORI_SELLER_IDS: ${{ vars.AVORI_SELLER_IDS || '7495150558072178725' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          pip install -r requirements.txt
+
+      - name: Run daily discovery
+        run: |
+          . .venv/bin/activate
+          python scripts/run_daily_discovery.py
+
+      - name: Upload output artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: avori-daily-discovery
+          path: output/

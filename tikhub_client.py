@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 import httpx
 
 from config import TIKHUB_API_KEY
+from utils import flatten_keys
 
 
 BASE_URL = "https://api.tikhub.io"
@@ -416,40 +418,46 @@ def request_tikhub_json(path: str, params: dict | None = None, timeout: float = 
     return response.status_code, response.json()
 
 
+async def request_tikhub_json_async(
+    path: str,
+    params: dict | None = None,
+    timeout: float = 35.0,
+    client: httpx.AsyncClient | None = None,
+) -> tuple[int, dict]:
+    if client is not None:
+        response = await client.get(
+            f"{BASE_URL}{path}",
+            params=params or {},
+            headers={"Authorization": f"Bearer {TIKHUB_API_KEY}"},
+            timeout=timeout,
+        )
+        return response.status_code, response.json()
+
+    async with httpx.AsyncClient() as async_client:
+        response = await async_client.get(
+            f"{BASE_URL}{path}",
+            params=params or {},
+            headers={"Authorization": f"Bearer {TIKHUB_API_KEY}"},
+            timeout=timeout,
+        )
+        return response.status_code, response.json()
+
+
 def _available_fields(name: str, payload: dict) -> list[str]:
-    data = payload.get("data")
-    if name == "search_word_suggestion" and isinstance(data, dict):
-        return ["data"]
-    if name in {"search_products_list", "search_products_list_v2"} and isinstance(data, dict):
-        return [
-            "products.product_id",
-            "products.title",
-            "products.image",
-            "products.product_price_info",
-            "products.rate_info",
-            "products.sold_info",
-            "products.seller_info",
-            "products.seo_url",
-        ]
-    if name == "seller_products_list" and isinstance(data, dict):
-        return [
-            "products.product_id",
-            "products.title",
-            "products.image",
-            "products.product_price_info",
-            "products.rate_info",
-            "products.sold_info",
-            "products.seller_info",
-            "products.seo_url",
-        ]
-    if name == "product_detail" and isinstance(data, dict):
-        return [
-            "product_data.page_config.components_map.product_info.category_info",
-            "product_data.page_config.components_map.product_info.shop_info",
-            "product_data.page_config.components_map.related_videos",
-        ]
-    if isinstance(data, dict):
-        return list(data.keys())[:10]
+    data: Any = payload.get("data")
+    if name in {"search_products_list", "search_products_list_v2", "seller_products_list"}:
+        products = (
+            (((data or {}).get("data") or {}).get("products"))
+            or ((((data or {}).get("data") or {}).get("component_data") or {}).get("products"))
+            or []
+        )
+        return [field.replace("0.", "", 1) for field in flatten_keys(products[:1], "products")]
+    if name == "product_detail":
+        if isinstance(data, dict) and "product_data" in data:
+            return flatten_keys(data.get("product_data"), "product_data")
+        return flatten_keys(((data or {}).get("data") or {}).get("global_data"), "global_data")
+    if isinstance(data, (dict, list)):
+        return flatten_keys(data)
     return []
 
 
@@ -516,7 +524,18 @@ def _endpoint_definitions() -> list[dict]:
 
 def audit_tikhub_endpoints(use_sample_data: bool = False) -> list[dict]:
     if use_sample_data or not has_live_api_access():
-        return deepcopy(SAMPLE_ENDPOINT_AUDIT)
+        sample_audit = deepcopy(SAMPLE_ENDPOINT_AUDIT)
+        sample_payloads = {
+            "search_word_suggestion": SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD,
+            "search_products_list": SAMPLE_SEARCH_PRODUCTS_PAYLOAD,
+            "search_products_list_v2": SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2,
+            "seller_products_list": SAMPLE_SELLER_PRODUCTS_PAYLOAD,
+            "product_detail": SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD,
+        }
+        for entry in sample_audit:
+            payload = sample_payloads.get(entry["name"], {})
+            entry["available_fields"] = _available_fields(entry["name"], payload)
+        return sample_audit
 
     audit = []
     for endpoint in _endpoint_definitions():

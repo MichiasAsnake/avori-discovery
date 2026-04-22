@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from typing import Any
 
 from tikhub_client import (
     SAMPLE_PRODUCT_DETAIL_PAYLOAD,
@@ -8,6 +9,7 @@ from tikhub_client import (
     SAMPLE_SELLER_PRODUCTS_PAYLOAD,
     SAMPLE_SHOWCASE_PAYLOAD,
     request_tikhub_json,
+    request_tikhub_json_async,
 )
 
 
@@ -24,6 +26,34 @@ def fetch_seller_products_list(seller_id, search_params="", region="US"):
         return payload
     except Exception:
         return deepcopy(SAMPLE_SELLER_PRODUCTS_PAYLOAD)
+
+
+async def fetch_product_detail_async(product_id, region="US", client=None):
+    try:
+        status_code, payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
+            {"product_id": product_id, "region": region},
+            timeout=DETAIL_TIMEOUT,
+            client=client,
+        )
+        if status_code == 200 and _has_v3_detail_data(payload):
+            return "product_detail_v3", payload
+    except Exception:
+        pass
+
+    try:
+        status_code, payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
+            {"product_id": product_id, "region": region},
+            timeout=DETAIL_TIMEOUT,
+            client=client,
+        )
+        if status_code == 200 and _has_v4_detail_data(payload):
+            return "product_detail_v4", payload
+    except Exception:
+        pass
+
+    return "product_detail_v3", deepcopy(SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
 
 
 def _request_detail_json(path, params):
@@ -114,6 +144,18 @@ def fetch_showcase_product_list(kol_id, count=20, next_scroll_param=""):
         _, payload = request_tikhub_json(
             "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
             {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
+        )
+        return payload
+    except Exception:
+        return deepcopy(SAMPLE_SHOWCASE_PAYLOAD)
+
+
+async def fetch_showcase_product_list_async(kol_id, count=20, next_scroll_param="", client=None):
+    try:
+        _, payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
+            {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
+            client=client,
         )
         return payload
     except Exception:

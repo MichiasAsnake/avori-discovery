@@ -2,6 +2,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest.mock import AsyncMock
 from contextlib import redirect_stdout
 from datetime import date
 from pathlib import Path
@@ -38,10 +39,10 @@ class RunnerTests(unittest.TestCase):
             self.assertEqual(saved["products"][0]["product_id"], result["ranked_products"][0]["product_id"])
             self.assertEqual(saved["keyword_product_counts"], result["results_payload"]["keyword_product_counts"])
 
-    @patch("avori_discovery.fetch_product_detail", return_value=("product_detail_v3", SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD))
+    @patch("avori_discovery.fetch_product_detail_async", new_callable=AsyncMock)
     @patch("avori_discovery.fetch_seller_products_list", return_value=SAMPLE_SELLER_PRODUCTS_PAYLOAD)
-    @patch("avori_discovery.fetch_search_products_list")
-    @patch("avori_discovery.fetch_search_word_suggestion")
+    @patch("avori_discovery.fetch_search_products_list_async", new_callable=AsyncMock)
+    @patch("avori_discovery.fetch_search_word_suggestion_async", new_callable=AsyncMock)
     @patch("avori_discovery.audit_tikhub_endpoints")
     def test_run_discovery_falls_back_to_seed_sellers_when_search_returns_zero_products(
         self,
@@ -49,7 +50,7 @@ class RunnerTests(unittest.TestCase):
         mock_search_word_suggestion,
         mock_search,
         _mock_seller_products,
-        _mock_product_detail,
+        mock_product_detail,
     ):
         mock_audit.return_value = [
             {"name": "search_word_suggestion", "usable": True},
@@ -59,6 +60,7 @@ class RunnerTests(unittest.TestCase):
         ]
         mock_search_word_suggestion.return_value = {"data": {"code": 0, "data": ["travel organizer"]}}
         mock_search.return_value = {"data": {"code": 0, "data": {"products": []}}}
+        mock_product_detail.return_value = ("product_detail_v3", SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = run_discovery(
@@ -73,10 +75,10 @@ class RunnerTests(unittest.TestCase):
         self.assertGreater(len(result["ranked_products"]), 0)
         self.assertGreater(len(result["results_payload"]["fallback_seller_product_counts"]), 0)
 
-    @patch("avori_discovery.fetch_product_detail", return_value=("product_detail_v3", SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD))
+    @patch("avori_discovery.fetch_product_detail_async", new_callable=AsyncMock)
     @patch("avori_discovery.fetch_seller_products_list", return_value=SAMPLE_SELLER_PRODUCTS_PAYLOAD)
-    @patch("avori_discovery.fetch_search_products_list")
-    @patch("avori_discovery.fetch_search_word_suggestion")
+    @patch("avori_discovery.fetch_search_products_list_async", new_callable=AsyncMock)
+    @patch("avori_discovery.fetch_search_word_suggestion_async", new_callable=AsyncMock)
     @patch("avori_discovery.audit_tikhub_endpoints")
     def test_run_discovery_can_disable_seed_seller_fallback(
         self,
@@ -84,7 +86,7 @@ class RunnerTests(unittest.TestCase):
         mock_search_word_suggestion,
         mock_search,
         mock_seller_products,
-        _mock_product_detail,
+        mock_product_detail,
     ):
         mock_audit.return_value = [
             {"name": "search_word_suggestion", "usable": True},
@@ -94,6 +96,7 @@ class RunnerTests(unittest.TestCase):
         ]
         mock_search_word_suggestion.return_value = {"data": {"code": 0, "data": ["travel organizer"]}}
         mock_search.return_value = {"data": {"code": 0, "data": {"products": []}}}
+        mock_product_detail.return_value = ("product_detail_v3", SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
 
         with tempfile.TemporaryDirectory() as tmpdir:
             result = run_discovery(

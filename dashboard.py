@@ -15,7 +15,8 @@ from agent import get_watchlist as agent_get_watchlist
 from agent import remove_from_watchlist as agent_remove_from_watchlist
 from agent import run_discovery as agent_run_discovery
 from agent import search_products as agent_search_products
-from config import OUTPUT_DIR
+from config import DASHBOARD_PRICE_MAX, OUTPUT_DIR
+from utils import build_tiktok_shop_url, compact_dict_rows
 
 
 RESULTS_STATE_KEY = "dashboard_results_payload"
@@ -27,13 +28,13 @@ WATCHLIST_STATE_KEY = "dashboard_watchlist"
 
 
 def load_latest_results_file(output_dir: Path = OUTPUT_DIR):
-    result_files = sorted(output_dir.glob("avori_results_*.json"), key=lambda path: path.stat().st_mtime)
+    result_files = sorted(output_dir.glob("avori_results_*.json"), key=lambda path: path.name)
     if not result_files:
         return None
     return json.loads(result_files[-1].read_text())
 
 
-def apply_product_filters(products, price_range=(0.0, 50.0), min_sold_count=0, early_window_only=False):
+def apply_product_filters(products, price_range=(0.0, DASHBOARD_PRICE_MAX), min_sold_count=0, early_window_only=False):
     filtered = []
     min_price, max_price = price_range
     for product in products:
@@ -96,8 +97,17 @@ def _tool_results_to_payload(tool_payload):
         results_file = Path(results_path)
         if results_file.exists():
             return json.loads(results_file.read_text())
+    if tool_payload.get("products"):
+        return {
+            "products": tool_payload.get("products", []),
+            "discovered_keywords": tool_payload.get("discovered_keywords", []),
+            "keyword_product_counts": tool_payload.get("keyword_product_counts", {}),
+            "fallback_seller_product_counts": tool_payload.get("fallback_seller_product_counts", {}),
+            "search_bridge_endpoint": tool_payload.get("search_bridge_endpoint", "search_products_list"),
+            "seed_terms": tool_payload.get("seed_terms", []),
+        }
     return {
-        "products": tool_payload.get("products", []),
+        "products": [],
         "discovered_keywords": [],
         "keyword_product_counts": {},
         "fallback_seller_product_counts": {},
@@ -120,12 +130,7 @@ def _search_results_to_payload(tool_payload):
 
 
 def _seo_url_value(product):
-    seo_url = product.get("seo_url")
-    if isinstance(seo_url, dict):
-        return seo_url.get("canonical_url") or seo_url.get("slug") or ""
-    if isinstance(seo_url, str):
-        return seo_url
-    return ""
+    return build_tiktok_shop_url(product.get("seo_url"))
 
 
 def _get_selected_product(products, selected_product_id):
@@ -168,24 +173,31 @@ def _refresh_watchlist():
 
 
 def _run_discovery_action():
-    tool_payload = json.loads(agent_run_discovery())
+    with st.spinner("Running discovery..."):
+        tool_payload = json.loads(agent_run_discovery())
     st.session_state[RESULTS_STATE_KEY] = _tool_results_to_payload(tool_payload)
     st.session_state[SELECTED_PRODUCT_KEY] = None
 
 
 def _run_keyword_search_action(keyword):
-    tool_payload = json.loads(agent_search_products(keyword))
+    with st.spinner(f"Searching '{keyword}'..."):
+        tool_payload = json.loads(agent_search_products(keyword))
     st.session_state[RESULTS_STATE_KEY] = _search_results_to_payload(tool_payload)
     st.session_state[SELECTED_PRODUCT_KEY] = None
 
 
-def _add_selected_product_to_watchlist(product, reason):
+def _add_selected_product_to_watchlist(product, reason, track):
     if not product:
         return
     agent_add_to_watchlist(
         product.get("product_id", ""),
         product.get("title", "Untitled"),
         reason.strip() or "Interesting candidate for Avori.",
+        track,
+        product.get("score"),
+        int(product.get("sold_count") or 0),
+        int(product.get("review_count") or 0),
+        float(product.get("price") or 0),
     )
     _refresh_watchlist()
 
@@ -197,8 +209,21 @@ def _remove_watchlist_item(product_id):
 
 def _send_chat_message(user_input: str):
     st.session_state[CHAT_MESSAGES_KEY].append({"role": "user", "content": user_input})
-    reply = run_chat_turn(st.session_state[CHAT_SESSION_KEY], user_input)
+    with st.spinner("Thinking..."):
+        reply = run_chat_turn(st.session_state[CHAT_SESSION_KEY], user_input)
     st.session_state[CHAT_MESSAGES_KEY].append({"role": "assistant", "content": reply})
+
+
+def format_review_summary_rows(review_summary):
+    if not isinstance(review_summary, dict):
+        return []
+    return compact_dict_rows(review_summary)
+
+
+def format_signal_rows(signals):
+    if not isinstance(signals, dict):
+        return []
+    return compact_dict_rows(signals)
 
 
 def main():
@@ -215,7 +240,13 @@ def main():
             _run_keyword_search_action(keyword.strip())
 
         st.divider()
-        price_range = st.slider("Price range", min_value=0.0, max_value=50.0, value=(0.0, 50.0), step=1.0)
+        price_range = st.slider(
+            "Price range",
+            min_value=0.0,
+            max_value=float(DASHBOARD_PRICE_MAX),
+            value=(0.0, float(DASHBOARD_PRICE_MAX)),
+            step=1.0,
+        )
         min_sold_count = st.number_input("Min sold count", min_value=0, value=0, step=10)
         early_window_only = st.toggle("Early window only", value=False)
 
@@ -230,6 +261,12 @@ def main():
                     st.markdown(f"**{entry.get('title', 'Untitled')}**")
                     st.caption(f"{entry.get('product_id')} • added {entry.get('added_at', 'n/a')}")
                     st.write(entry.get("reason", ""))
+                    if entry.get("track"):
+                        velocity = entry.get("velocity")
+                        velocity_text = f"{velocity} sold/week" if velocity is not None else "tracking started"
+                        st.caption(f"Tracking enabled • {velocity_text}")
+                    if entry.get("graduated"):
+                        st.caption("Graduated sourcing candidate")
                     if st.button(
                         "Remove",
                         key=f"watchlist-remove-{entry.get('product_id')}",
@@ -292,7 +329,8 @@ def main():
             detail_cache = st.session_state[DETAIL_CACHE_KEY]
             product_id = selected_product["product_id"]
             if product_id not in detail_cache:
-                detail_cache[product_id] = _load_product_detail(product_id)
+                with st.spinner("Loading product detail..."):
+                    detail_cache[product_id] = _load_product_detail(product_id)
             detail_payload = detail_cache[product_id]
 
             st.markdown(f"### {selected_product.get('title', 'Untitled')}")
@@ -303,7 +341,16 @@ def main():
             detail_cols[3].metric("Shop", selected_product.get("seller_name") or "unknown")
 
             st.write("Categories:", ", ".join(detail_payload.get("category_names", [])) or "n/a")
-            st.write("Supplementary signals:", detail_payload.get("supplementary_signals", {}))
+            signal_rows = format_signal_rows(detail_payload.get("supplementary_signals", {}))
+            if signal_rows:
+                st.dataframe(pd.DataFrame(signal_rows, columns=["Signal", "Value"]), hide_index=True, use_container_width=True)
+            else:
+                st.write("Supplementary signals: n/a")
+
+            review_rows = format_review_summary_rows(detail_payload.get("review_summary", {}))
+            if review_rows:
+                with st.expander("Review summary", expanded=False):
+                    st.dataframe(pd.DataFrame(review_rows, columns=["Metric", "Value"]), hide_index=True, use_container_width=True)
 
             seo_url = _seo_url_value(selected_product)
             if seo_url:
@@ -316,9 +363,10 @@ def main():
                 value=f"Interesting {selected_product.get('seller_name', 'seller')} candidate for Avori.",
                 key=f"watch-reason-{product_id}",
             )
+            track_product = st.checkbox("Track weekly velocity", value=True, key=f"watch-track-{product_id}")
             action_cols = st.columns(2)
             if action_cols[0].button("Add To Watchlist", use_container_width=True):
-                _add_selected_product_to_watchlist(selected_product, watch_reason)
+                _add_selected_product_to_watchlist(selected_product, watch_reason, track_product)
                 st.success("Saved to watchlist.")
             if action_cols[1].button("Discuss In Chat", use_container_width=True):
                 prompt = (

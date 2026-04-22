@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from typing import Any
 
 from tikhub_client import (
     SAMPLE_LIVE_SEARCH_PAYLOAD,
@@ -9,6 +10,7 @@ from tikhub_client import (
     SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2,
     SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD,
     request_tikhub_json,
+    request_tikhub_json_async,
 )
 
 
@@ -76,6 +78,18 @@ def fetch_search_products_list(search_word, offset=0, page_token="", region="US"
         return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
 
 
+async def fetch_search_products_list_async(search_word, offset=0, page_token="", region="US", client=None):
+    try:
+        _, payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/shop/web/fetch_search_products_list",
+            {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
+            client=client,
+        )
+        return payload
+    except Exception:
+        return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
+
+
 def fetch_search_products_list_v2(search_word, offset=0, page_token="", region="US"):
     try:
         _, payload = request_tikhub_json(
@@ -85,6 +99,37 @@ def fetch_search_products_list_v2(search_word, offset=0, page_token="", region="
         return payload
     except Exception:
         return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2)
+
+
+async def fetch_search_word_suggestion_async(search_word, lang="en-US", region="US", client=None):
+    try:
+        status_code, payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
+            {"search_word": search_word, "lang": lang, "region": region},
+            client=client,
+        )
+        if status_code == 200 and _shop_suggestion_payload_usable(payload):
+            return payload
+
+        fallback_status, fallback_payload = await request_tikhub_json_async(
+            "/api/v1/tiktok/web/fetch_search_keyword_suggest",
+            {"keyword": search_word, "region": region},
+            client=client,
+        )
+        if fallback_status == 200:
+            normalized_payload = _normalize_web_keyword_suggest_payload(fallback_payload)
+            if _shop_suggestion_payload_usable(normalized_payload):
+                return normalized_payload
+    except Exception:
+        pass
+    return deepcopy(SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD)
+
+
+def extract_search_pagination(payload: dict[str, Any]) -> tuple[bool, str]:
+    data = ((payload.get("data") or {}).get("data")) or {}
+    component_data = data.get("component_data") or {}
+    source = component_data if isinstance(component_data, dict) else data
+    return bool(source.get("has_more")), str(source.get("page_token") or "")
 
 
 def extract_seller_ids_from_live_search(live_results):

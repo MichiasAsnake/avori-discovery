@@ -26,6 +26,10 @@ Set these in Vercel Project Settings:
 - `AVORI_SEED_TERMS` optional, comma-separated
 - `AVORI_SELLER_IDS` optional, comma-separated
 - `AVORI_DATA_DIR` optional. If omitted on Vercel, the app uses `/tmp/avori-discovery`
+- `AVORI_AGENT_MODEL` optional, defaults to `gpt-4o-mini`
+- `AVORI_DASHBOARD_PRICE_MAX` optional, defaults to `200`
+- `AVORI_SEARCH_PAGE_COUNT` optional, defaults to `3`
+- `AVORI_TRACKING_GRADUATION_SOLD_COUNT` optional, defaults to `5000`
 
 ### Deploy
 
@@ -38,12 +42,18 @@ Set these in Vercel Project Settings:
 
 - `GET /health`
 - `POST /discovery/run`
+- `GET /discovery/jobs/{job_id}`
 - `GET /products/search?keyword=travel+bag`
 - `GET /products/{product_id}`
 - `GET /watchlist`
 - `POST /watchlist`
+- `POST /watchlist/refresh`
 - `DELETE /watchlist/{product_id}`
 
 ### Persistence note
 
-On Vercel, watchlist data and agent session files default to `/tmp/avori-discovery`, which is writable but ephemeral. That means Vercel deployments are good for stateless API use and testing, but watchlist persistence is not guaranteed across cold starts or redeploys unless you later move that data to a real external store.
+On Vercel, watchlist data, discovery job state, and agent session files default to `/tmp/avori-discovery`, which is writable but ephemeral. The app now stores watchlist and job state in SQLite instead of flat JSON, but Vercel deployments are still best for stateless API use and testing unless `AVORI_DATA_DIR` points to durable storage.
+
+## Scheduled discovery
+
+The repo includes `.github/workflows/daily-discovery.yml`, which runs the discovery pipeline every day and uploads the generated output files as a workflow artifact. The workflow also refreshes tracked watchlist products so velocity and graduation status keep updating over time.

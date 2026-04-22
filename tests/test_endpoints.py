@@ -10,7 +10,7 @@ from endpoints.search import (
     fetch_search_word_suggestion,
 )
 from endpoints.trending import fetch_top_products_list
-from tikhub_client import SAMPLE_PRODUCT_DETAIL_PAYLOAD, SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD, audit_tikhub_endpoints
+from tikhub_client import SAMPLE_PRODUCT_DETAIL_PAYLOAD, SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD, _available_fields, audit_tikhub_endpoints
 
 
 class EndpointFallbackTests(unittest.TestCase):
@@ -209,6 +209,26 @@ class EndpointFallbackTests(unittest.TestCase):
         seller_ids = extract_seller_ids_from_live_search(live_results)
 
         self.assertEqual(seller_ids, ["seller-1", "display-2", "author-3"])
+
+    def test_available_fields_uses_live_payload_shape(self):
+        payload = {
+            "data": {
+                "data": {
+                    "products": [
+                        {
+                            "product_id": "p1",
+                            "title": "Travel organizer",
+                            "seller_info": {"seller_id": "seller-1"},
+                        }
+                    ]
+                }
+            }
+        }
+
+        fields = _available_fields("search_products_list", payload)
+
+        self.assertIn("products.product_id", fields)
+        self.assertIn("products.seller_info.seller_id", fields)
 
 
 if __name__ == "__main__":

@@ -80,6 +80,32 @@ class DashboardHelperTests(unittest.TestCase):
         self.assertTrue(rows[0]["title"].endswith("..."))
         self.assertEqual(rows[0]["keyword"], "travel organizer")
 
+    def test_tool_results_payload_prefers_results_file(self):
+        import dashboard
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            results_path = Path(tmpdir) / "avori_results_2026-04-22.json"
+            results_path.write_text(json.dumps({"products": [{"product_id": "p1"}]}))
+
+            payload = dashboard._tool_results_to_payload({"results_path": str(results_path), "products": []})
+
+        self.assertEqual(payload["products"][0]["product_id"], "p1")
+
+    def test_seo_url_value_builds_absolute_url(self):
+        import dashboard
+
+        url = dashboard._seo_url_value({"seo_url": "/travel-hanging-toiletry-organizer"})
+
+        self.assertTrue(url.startswith("https://shop.tiktok.com/"))
+
+    def test_format_review_summary_rows_flattens_values(self):
+        import dashboard
+
+        rows = dashboard.format_review_summary_rows({"review_count": 18, "average_rating": 4.8})
+
+        self.assertEqual(rows[0][0], "Review Count")
+        self.assertEqual(rows[0][1], 18)
+
     @patch("dashboard.agent_get_watchlist")
     def test_load_watchlist_uses_agent_tool_payload(self, mock_get_watchlist):
         import dashboard
