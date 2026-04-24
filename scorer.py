@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 from config import SCORING_WEIGHTS
+from signal_score import score_product_signal
 
 
 def flag_early_window(product):
@@ -45,6 +46,10 @@ def score_product(product):
 
     scored["early_window"] = early_window
     scored["score"] = round(score, 2)
+    product_signal = score_product_signal(scored)
+    scored["product_signal"] = product_signal
+    scored["signal_score"] = product_signal["final_score"]
+    scored["recommended_action"] = product_signal["decision"]
     supplementary_signals = _supplementary_signals(scored)
     if supplementary_signals:
         scored["supplementary_signals"] = supplementary_signals
