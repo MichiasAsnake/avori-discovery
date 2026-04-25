@@ -5,6 +5,7 @@ from datetime import date
 
 from agents import Agent, Runner, SQLiteSession, function_tool
 
+from ai_judge import analyze_product, reject_non_finite_json_constant
 from avori_discovery import (
     _extract_category_names,
     _extract_detail_bonus_signals,
@@ -96,6 +97,17 @@ def refresh_watchlist_tracking() -> str:
     return json.dumps(refresh_tracked_watchlist(), indent=2)
 
 
+def analyze_product_candidate(product_json: str) -> str:
+    """Return a structured product judgment memo for one product JSON payload."""
+    try:
+        product = json.loads(product_json, parse_constant=reject_non_finite_json_constant)
+    except (json.JSONDecodeError, ValueError):
+        return json.dumps({"error": "invalid_product_json"}, indent=2, allow_nan=False)
+    if not isinstance(product, dict):
+        return json.dumps({"error": "product_json_must_be_an_object"}, indent=2, allow_nan=False)
+    return json.dumps(analyze_product(product), indent=2, allow_nan=False)
+
+
 agent = Agent(
     name="Avori Discovery Agent",
     model=AGENT_MODEL,
@@ -104,10 +116,10 @@ You are Avori's product discovery and strategy agent. You help find early-window
 TikTok Shop products and think through product decisions for Avori, a travel
 accessories and organized-living brand ($14-$30, TikTok Shop-first, dropship).
 
-You have tools to run discovery, search products, get product detail, and manage
-a watchlist. But you're also a thinking partner — you can discuss strategy,
-analyze trends, help with pricing, and reason through product decisions even
-without calling a tool.
+You have tools to run discovery, search products, get product detail, generate
+structured product judgment memos, and manage a watchlist. But you're also a
+thinking partner — you can discuss strategy, analyze trends, help with pricing,
+and reason through product decisions even without calling a tool.
 
 Early window flag: sold_count > 1000 AND review_count < 30 = high priority.
 Avori categories: travel bags, organizers, jewelry cases, desk organizers, tech accessories.
@@ -120,6 +132,7 @@ Avori categories: travel bags, organizers, jewelry cases, desk organizers, tech 
         function_tool(get_watchlist),
         function_tool(remove_from_watchlist),
         function_tool(refresh_watchlist_tracking),
+        function_tool(analyze_product_candidate),
     ],
 )
 

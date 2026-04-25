@@ -22,6 +22,7 @@ class AgentModuleTests(unittest.TestCase):
         self.assertTrue(callable(agent.get_watchlist))
         self.assertTrue(callable(agent.remove_from_watchlist))
         self.assertTrue(callable(agent.refresh_watchlist_tracking))
+        self.assertTrue(callable(agent.analyze_product_candidate))
         self.assertIn("thinking partner", agent.agent.instructions)
         self.assertIn("watchlist", agent.agent.instructions)
 
@@ -153,6 +154,34 @@ class AgentModuleTests(unittest.TestCase):
         self.assertEqual(payload["result_count"], 1)
         self.assertEqual(payload["products"][0]["product_id"], "p1")
         self.assertGreater(payload["products"][0]["score"], 0)
+
+    def test_analyze_product_candidate_tool_returns_memo(self):
+        import agent
+
+        product_json = json.dumps(
+            {
+                "product_id": "p-analysis",
+                "title": "Purse Organizer Insert",
+                "price": 16.99,
+                "sold_count": 1400,
+                "review_count": 20,
+                "rating": 4.7,
+            }
+        )
+
+        payload = json.loads(agent.analyze_product_candidate(product_json))
+
+        self.assertEqual(payload["product_id"], "p-analysis")
+        self.assertIn("decision", payload)
+        self.assertIn("content_angles", payload)
+        self.assertIn("signal_snapshot", payload)
+
+    def test_analyze_product_candidate_rejects_non_finite_json_constants(self):
+        import agent
+
+        payload = json.loads(agent.analyze_product_candidate('{"product_id":"bad","price": NaN}'))
+
+        self.assertEqual(payload["error"], "invalid_product_json")
 
 
 if __name__ == "__main__":
