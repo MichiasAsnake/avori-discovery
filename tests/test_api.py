@@ -10,8 +10,17 @@ class ApiTests(unittest.TestCase):
     def setUp(self):
         self.client = TestClient(app)
 
-    def test_index_reports_api_status(self):
+    def test_index_returns_browser_landing_page(self):
         response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers["content-type"])
+        self.assertIn("Avori Discovery", response.text)
+        self.assertIn("Find products with real selling momentum", response.text)
+        self.assertIn("/products/search", response.text)
+
+    def test_api_status_reports_machine_readable_status(self):
+        response = self.client.get("/api")
 
         self.assertEqual(response.status_code, 200)
         payload = response.json()

@@ -9,7 +9,8 @@ This repo is prepared for Vercel as a Python API project.
 ### What deploys
 
 - `app.py` is the FastAPI entrypoint Vercel detects automatically
-- `/`, `/health`, `/docs`, and the rest of the API routes are served directly by FastAPI
+- `/` serves a lightweight browser landing page with quick links and product search
+- `/api`, `/health`, `/docs`, and the rest of the API routes are served directly by FastAPI
 
 ### What stays local
 
@@ -40,6 +41,8 @@ Set these in Vercel Project Settings:
 
 ### API endpoints
 
+- `GET /` browser landing page
+- `GET /api` machine-readable deployment status
 - `GET /health`
 - `POST /discovery/run`
 - `GET /discovery/jobs/{job_id}`
