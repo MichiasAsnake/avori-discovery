@@ -111,9 +111,9 @@ class AgentModuleTests(unittest.TestCase):
         self.assertEqual(mock_sqlite_session.call_args.args[0], "dashboard-chat")
 
     @patch("agent.fetch_product_detail")
-    @patch("agent._extract_detail_bonus_signals")
-    @patch("agent._extract_category_names")
-    @patch("agent._extract_review_summary")
+    @patch("agent.extract_detail_bonus_signals")
+    @patch("agent.extract_category_names")
+    @patch("agent.extract_review_summary")
     def test_get_product_detail_tool_formats_detail_payload(
         self,
         mock_extract_review_summary,

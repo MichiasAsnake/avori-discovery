@@ -31,21 +31,21 @@ class ScorerTests(unittest.TestCase):
         self.assertGreater(scored["score"], 0)
         self.assertTrue(scored["early_window"])
 
-    def test_rank_products_orders_by_score_desc(self):
+    def test_rank_products_orders_by_signal_score_desc(self):
         products = [
             {
                 "product_id": "a",
                 "title": "A",
-                "sold_count": 800,
-                "review_count": 100,
-                "rating": 4.1,
-                "creator_video_count": 2,
-                "seller_catalog_count": 50,
+                "sold_count": 3000,
+                "review_count": 1400,
+                "rating": 4.2,
+                "creator_video_count": 3,
+                "seller_catalog_count": 320,
             },
             {
                 "product_id": "b",
                 "title": "B",
-                "sold_count": 3200,
+                "sold_count": 2100,
                 "review_count": 18,
                 "rating": 4.9,
                 "creator_video_count": 21,

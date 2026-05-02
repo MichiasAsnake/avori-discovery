@@ -1,13 +1,8 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 from tikhub_client import (
-    SAMPLE_PRODUCT_DETAIL_PAYLOAD,
-    SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD,
-    SAMPLE_SELLER_PRODUCTS_PAYLOAD,
-    SAMPLE_SHOWCASE_PAYLOAD,
     request_tikhub_json,
     request_tikhub_json_async,
 )
@@ -18,42 +13,34 @@ DETAIL_RETRY_COUNT = 3
 
 
 def fetch_seller_products_list(seller_id, search_params="", region="US"):
-    try:
-        _, payload = request_tikhub_json(
-            "/api/v1/tiktok/shop/web/fetch_seller_products_list",
-            {"seller_id": seller_id, "search_params": search_params, "region": region},
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SELLER_PRODUCTS_PAYLOAD)
+    _, payload = request_tikhub_json(
+        "/api/v1/tiktok/shop/web/fetch_seller_products_list",
+        {"seller_id": seller_id, "search_params": search_params, "region": region},
+    )
+    return payload
 
 
 async def fetch_product_detail_async(product_id, region="US", client=None):
-    try:
-        status_code, payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
-            {"product_id": product_id, "region": region},
-            timeout=DETAIL_TIMEOUT,
-            client=client,
-        )
-        if status_code == 200 and _has_v3_detail_data(payload):
-            return "product_detail_v3", payload
-    except Exception:
-        pass
+    status_code, payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
+        {"product_id": product_id, "region": region},
+        timeout=DETAIL_TIMEOUT,
+        client=client,
+    )
+    if status_code == 200 and _has_v3_detail_data(payload):
+        return "product_detail_v3", payload
 
-    try:
-        status_code, payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
-            {"product_id": product_id, "region": region},
-            timeout=DETAIL_TIMEOUT,
-            client=client,
-        )
-        if status_code == 200 and _has_v4_detail_data(payload):
-            return "product_detail_v4", payload
-    except Exception:
-        pass
-
-    return "product_detail_v3", deepcopy(SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
+    fallback_status, fallback_payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
+        {"product_id": product_id, "region": region},
+        timeout=DETAIL_TIMEOUT,
+        client=client,
+    )
+    if fallback_status == 200 and _has_v4_detail_data(fallback_payload):
+        return "product_detail_v4", fallback_payload
+    raise RuntimeError(
+        f"product detail unavailable for product_id={product_id} (status={status_code}, fallback_status={fallback_status})"
+    )
 
 
 def _request_detail_json(path, params):
@@ -90,29 +77,23 @@ def _has_v4_detail_data(payload):
 
 
 def fetch_product_detail_v3(product_id, region="US"):
-    try:
-        _, payload = _request_detail_json(
-            "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
-            {"product_id": product_id, "region": region},
-        )
-        if _has_v3_detail_data(payload):
-            return payload
-        raise RuntimeError("v3 detail payload missing product_data")
-    except Exception:
-        return deepcopy(SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
+    _, payload = _request_detail_json(
+        "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
+        {"product_id": product_id, "region": region},
+    )
+    if _has_v3_detail_data(payload):
+        return payload
+    raise RuntimeError("v3 detail payload missing product_data")
 
 
 def fetch_product_detail_v4(product_id, region="US"):
-    try:
-        _, payload = _request_detail_json(
-            "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
-            {"product_id": product_id, "region": region},
-        )
-        if _has_v4_detail_data(payload):
-            return payload
-        raise RuntimeError("v4 detail payload missing global_data.product_info")
-    except Exception:
-        return deepcopy(SAMPLE_PRODUCT_DETAIL_PAYLOAD)
+    _, payload = _request_detail_json(
+        "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
+        {"product_id": product_id, "region": region},
+    )
+    if _has_v4_detail_data(payload):
+        return payload
+    raise RuntimeError("v4 detail payload missing global_data.product_info")
 
 
 def fetch_product_detail(product_id, region="US"):
@@ -124,39 +105,35 @@ def fetch_product_detail(product_id, region="US"):
         if status_code == 200 and _has_v3_detail_data(payload):
             return "product_detail_v3", payload
     except Exception:
-        pass
+        status_code = None
 
     try:
-        status_code, payload = _request_detail_json(
+        fallback_status, payload = _request_detail_json(
             "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
             {"product_id": product_id, "region": region},
         )
-        if status_code == 200 and _has_v4_detail_data(payload):
+        if fallback_status == 200 and _has_v4_detail_data(payload):
             return "product_detail_v4", payload
     except Exception:
-        pass
+        fallback_status = None
 
-    return "product_detail_v3", deepcopy(SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
+    raise RuntimeError(
+        f"product detail unavailable for product_id={product_id} (status={status_code}, fallback_status={fallback_status})"
+    )
 
 
 def fetch_showcase_product_list(kol_id, count=20, next_scroll_param=""):
-    try:
-        _, payload = request_tikhub_json(
-            "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
-            {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SHOWCASE_PAYLOAD)
+    _, payload = request_tikhub_json(
+        "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
+        {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
+    )
+    return payload
 
 
 async def fetch_showcase_product_list_async(kol_id, count=20, next_scroll_param="", client=None):
-    try:
-        _, payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
-            {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
-            client=client,
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SHOWCASE_PAYLOAD)
+    _, payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
+        {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
+        client=client,
+    )
+    return payload

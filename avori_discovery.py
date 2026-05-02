@@ -30,8 +30,16 @@ from endpoints.search import (
     extract_search_pagination,
     fetch_search_products_list,
     fetch_search_products_list_async,
+    fetch_search_products_list_v2_async,
     fetch_search_word_suggestion,
     fetch_search_word_suggestion_async,
+)
+from extractors import (
+    count_matching_showcase_entries,
+    extract_category_names,
+    extract_detail_bonus_signals,
+    extract_related_creator_ids,
+    extract_review_summary,
 )
 from output import build_daily_brief, write_daily_brief, write_results_json
 from scorer import rank_products
@@ -41,6 +49,7 @@ from tikhub_client import (
     SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD,
     SAMPLE_PRODUCTS,
     SAMPLE_SEARCH_PRODUCTS_PAYLOAD,
+    SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2,
     SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD,
     audit_tikhub_endpoints,
 )
@@ -71,111 +80,6 @@ def _normalize_shop_product(product, source_endpoint):
         "source_endpoint": source_endpoint,
         "category_names": [],
     }
-
-
-def _v3_product_component(detail_payload):
-    components = dig(detail_payload, "data", "product_data", "page_config", "components_map", default=[]) or []
-    return next((component for component in components if component.get("component_name") == "product_info"), {})
-
-
-def _v3_related_videos_component(detail_payload):
-    components = dig(detail_payload, "data", "product_data", "page_config", "components_map", default=[]) or []
-    return next((component for component in components if component.get("component_name") == "related_videos"), {})
-
-
-def _extract_category_names(detail_payload, detail_endpoint):
-    if detail_endpoint == "product_detail_v3":
-        categories = dig(
-            _v3_product_component(detail_payload),
-            "component_data",
-            "category_info",
-            "recommended_categories",
-            default=[],
-        ) or []
-        names = []
-        for entry in categories:
-            category_name = entry.get("category_name_en") or entry.get("category_name")
-            if category_name:
-                names.append(category_name)
-        return names
-
-    categories = dig(detail_payload, "data", "data", "global_data", "product_info", "categories", default=[]) or []
-    return [entry.get("category_name") for entry in categories if entry.get("category_name")]
-
-
-def _extract_related_video_count(component_data):
-    if isinstance(component_data, list):
-        return len(component_data)
-    if not isinstance(component_data, dict):
-        return 0
-    for key in ("related_videos", "videos", "video_list", "items"):
-        value = component_data.get(key)
-        if isinstance(value, list):
-            return len(value)
-    return 0
-
-
-def _extract_related_creator_ids(detail_payload, detail_endpoint):
-    if detail_endpoint != "product_detail_v3":
-        return []
-    component_data = (_v3_related_videos_component(detail_payload).get("component_data") or {})
-    entries = []
-    if isinstance(component_data, list):
-        entries = component_data
-    elif isinstance(component_data, dict):
-        for key in ("related_videos", "videos", "video_list", "items"):
-            value = component_data.get(key)
-            if isinstance(value, list):
-                entries = value
-                break
-
-    creator_ids = []
-    for entry in entries:
-        if not isinstance(entry, dict):
-            continue
-        for key in ("creator_id", "author_id", "kol_id", "uid"):
-            if entry.get(key):
-                creator_ids.append(str(entry[key]))
-    return unique_strings(creator_ids)
-
-
-def _count_matching_showcase_entries(showcase_payload, product_id: str) -> int:
-    data = dig(showcase_payload, "data", "data", default={}) or {}
-    for key in ("products", "product_list", "items"):
-        entries = data.get(key)
-        if isinstance(entries, list):
-            return sum(1 for entry in entries if str(entry.get("product_id") or "") == product_id)
-    return 0
-
-
-def _extract_detail_bonus_signals(detail_payload, detail_endpoint):
-    if detail_endpoint != "product_detail_v3":
-        return {}
-
-    component_data = (_v3_product_component(detail_payload).get("component_data") or {})
-    shop_info = component_data.get("shop_info") or {}
-    shop_performance = component_data.get("shop_performance") or []
-    related_component_data = (_v3_related_videos_component(detail_payload).get("component_data") or {})
-
-    signals = {
-        "related_video_count": _extract_related_video_count(related_component_data),
-        "shop_performance_count": len(shop_performance) if isinstance(shop_performance, list) else 0,
-        "shop_review_count": safe_int(shop_info.get("review_count")),
-        "shop_follower_count": safe_int(shop_info.get("followers_count")),
-        "shop_on_sell_product_count": safe_int(shop_info.get("on_sell_product_count")),
-    }
-    return {key: value for key, value in signals.items() if value}
-
-
-def _extract_review_summary(detail_payload, detail_endpoint):
-    if detail_endpoint == "product_detail_v3":
-        product_info = dig(_v3_product_component(detail_payload), "component_data", "product_info", default={}) or {}
-        review_model = product_info.get("review_model")
-        if review_model:
-            return review_model
-        return dig(_v3_product_component(detail_payload), "component_data", "reviews_info", default={}) or {}
-
-    return dig(detail_payload, "data", "data", "global_data", "product_info", "review_model", default={}) or {}
 
 
 def _extract_search_products(payload, _search_endpoint):
@@ -227,11 +131,13 @@ async def _collect_keyword_products_async(keywords, search_endpoint, use_sample_
         pages = []
         page_token = ""
         offset = 0
+        use_v2 = search_endpoint == "search_products_list_v2"
         for _ in range(SEARCH_PAGE_COUNT):
             if use_sample_data:
-                payload = deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
+                payload = deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2 if use_v2 else SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
             else:
-                payload = await fetch_search_products_list_async(keyword, offset=offset, page_token=page_token, region=REGION, client=client)
+                fetcher = fetch_search_products_list_v2_async if use_v2 else fetch_search_products_list_async
+                payload = await fetcher(keyword, offset=offset, page_token=page_token, region=REGION, client=client)
             pages.append(payload)
             has_more, next_page_token = extract_search_pagination(payload)
             if not has_more and not next_page_token:
@@ -314,23 +220,23 @@ async def _enrich_products_with_detail_async(products, use_sample_data=False):
             showcase_payloads = []
         else:
             detail_endpoint, detail_payload = await fetch_product_detail_async(product_copy["product_id"], region=REGION, client=client)
-            creator_ids = _extract_related_creator_ids(detail_payload, detail_endpoint)[:3]
+            creator_ids = extract_related_creator_ids(detail_payload, detail_endpoint)[:3]
             showcase_payloads = []
             for creator_id in creator_ids:
                 showcase_payloads.append(await fetch_showcase_product_list_async(creator_id, client=client))
 
-        bonus_signals = _extract_detail_bonus_signals(detail_payload, detail_endpoint)
+        bonus_signals = extract_detail_bonus_signals(detail_payload, detail_endpoint)
         creator_showcase_hits = max(
-            [_count_matching_showcase_entries(payload, product_copy["product_id"]) for payload in showcase_payloads] or [0]
+            [count_matching_showcase_entries(payload, product_copy["product_id"]) for payload in showcase_payloads] or [0]
         )
-        product_copy["category_names"] = _extract_category_names(detail_payload, detail_endpoint)
+        product_copy["category_names"] = extract_category_names(detail_payload, detail_endpoint)
         product_copy["detail_endpoint"] = detail_endpoint
         product_copy["creator_video_count"] = max(
             bonus_signals.get("related_video_count", 0),
             creator_showcase_hits,
         )
         product_copy["seller_catalog_count"] = bonus_signals.get("shop_on_sell_product_count", 0)
-        product_copy["review_summary"] = _extract_review_summary(detail_payload, detail_endpoint)
+        product_copy["review_summary"] = extract_review_summary(detail_payload, detail_endpoint)
         product_copy.update(bonus_signals)
         return product_copy
 
@@ -345,10 +251,6 @@ async def _enrich_products_with_detail_async(products, use_sample_data=False):
                 return await enrich_product(product, client=client)
 
         return await asyncio.gather(*(limited_enrich(product) for product in products))
-
-
-def _run_async(coroutine):
-    return asyncio.run(coroutine)
 
 
 def _cap_seller_dominance(products, limit=20, max_per_seller=5):
@@ -370,49 +272,65 @@ def _cap_seller_dominance(products, limit=20, max_per_seller=5):
     return capped_products
 
 
-def build_discovery_payload(
+async def _build_discovery_payload_async(
     *,
-    use_sample_data: bool = False,
-    seller_fallback: bool = True,
+    use_sample_data: bool,
+    seller_fallback: bool,
+    endpoint_audit: list[dict],
 ) -> dict:
-    endpoint_audit = audit_tikhub_endpoints(use_sample_data=use_sample_data)
     usable_endpoints = {entry["name"] for entry in endpoint_audit if entry.get("usable")}
-    search_bridge_endpoint = "search_products_list" if "search_products_list" in usable_endpoints else None
+    if "search_products_list" in usable_endpoints:
+        search_bridge_endpoint = "search_products_list"
+    elif "search_products_list_v2" in usable_endpoints:
+        search_bridge_endpoint = "search_products_list_v2"
+    else:
+        search_bridge_endpoint = None
 
     discovered_keywords = []
     keyword_product_counts = {}
     products = []
     fallback_seller_product_counts = {}
+    errors = []
 
     if search_bridge_endpoint and "search_word_suggestion" in usable_endpoints:
-        discovered_keywords = _run_async(_discover_keywords_async(SEED_TERMS, use_sample_data=use_sample_data))
+        discovered_keywords = await _discover_keywords_async(SEED_TERMS, use_sample_data=use_sample_data)
+    elif not use_sample_data:
+        errors.append("Keyword suggestion endpoint is unavailable.")
 
     if search_bridge_endpoint and discovered_keywords:
-        products, keyword_product_counts = _run_async(
-            _collect_keyword_products_async(
-                discovered_keywords,
-                search_bridge_endpoint,
-                use_sample_data=use_sample_data,
-            )
+        products, keyword_product_counts = await _collect_keyword_products_async(
+            discovered_keywords,
+            search_bridge_endpoint,
+            use_sample_data=use_sample_data,
         )
+    elif not use_sample_data:
+        errors.append("Search products endpoint is unavailable or produced no keywords.")
 
     if seller_fallback and not products:
-        products, fallback_seller_product_counts = _collect_fallback_seller_products(
-            SELLER_IDS,
-            use_sample_data=use_sample_data or "seller_products_list" not in usable_endpoints,
-        )
+        if use_sample_data:
+            products, fallback_seller_product_counts = _collect_fallback_seller_products(SELLER_IDS, use_sample_data=True)
+        elif "seller_products_list" in usable_endpoints:
+            products, fallback_seller_product_counts = _collect_fallback_seller_products(SELLER_IDS, use_sample_data=False)
+        else:
+            errors.append("Seller fallback endpoint is unavailable.")
 
-    enriched_products = _run_async(
-        _enrich_products_with_detail_async(
-            products,
-            use_sample_data=use_sample_data or "product_detail" not in usable_endpoints,
-        )
-    )
+    if products:
+        if use_sample_data:
+            enriched_products = await _enrich_products_with_detail_async(products, use_sample_data=True)
+        elif "product_detail" in usable_endpoints:
+            enriched_products = await _enrich_products_with_detail_async(products, use_sample_data=False)
+        else:
+            errors.append("Product detail endpoint is unavailable; returning products without detail enrichment.")
+            enriched_products = products
+    else:
+        enriched_products = []
+
     ranked_products = rank_products(enriched_products)
     ranked_products = _cap_seller_dominance(ranked_products, limit=20, max_per_seller=5)
+    data_mode = "sample" if use_sample_data else "live"
 
     return {
-        "endpoint_audit": endpoint_audit if endpoint_audit else deepcopy(SAMPLE_ENDPOINT_AUDIT),
+        "endpoint_audit": endpoint_audit,
         "search_bridge_endpoint": search_bridge_endpoint,
         "seed_terms": SEED_TERMS,
         "discovered_keywords": discovered_keywords,
@@ -420,7 +338,26 @@ def build_discovery_payload(
         "fallback_seller_product_counts": fallback_seller_product_counts,
         "seller_ids": SELLER_IDS,
         "products": ranked_products,
+        "data_mode": data_mode,
+        "errors": errors,
     }
+
+
+def build_discovery_payload(
+    *,
+    use_sample_data: bool = False,
+    seller_fallback: bool = True,
+) -> dict:
+    endpoint_audit = audit_tikhub_endpoints(use_sample_data=use_sample_data)
+    if not endpoint_audit:
+        endpoint_audit = deepcopy(SAMPLE_ENDPOINT_AUDIT)
+    return asyncio.run(
+        _build_discovery_payload_async(
+            use_sample_data=use_sample_data,
+            seller_fallback=seller_fallback,
+            endpoint_audit=endpoint_audit,
+        )
+    )
 
 
 def run_discovery(
@@ -450,10 +387,10 @@ def run_discovery(
 
 
 def search_keyword_candidates(keyword: str, *, use_sample_data: bool = False) -> dict:
-    products, keyword_product_counts = _run_async(
-        _collect_keyword_products_async([keyword], "search_products_list", use_sample_data=use_sample_data)
+    products, keyword_product_counts = asyncio.run(
+        _collect_keyword_products_async([keyword], "search_products_list_v2", use_sample_data=use_sample_data)
     )
-    enriched_products = _run_async(_enrich_products_with_detail_async(products, use_sample_data=use_sample_data))
+    enriched_products = asyncio.run(_enrich_products_with_detail_async(products, use_sample_data=use_sample_data))
     ranked_products = rank_products(enriched_products)
     return {
         "keyword": keyword,

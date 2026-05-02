@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 import pandas as pd
@@ -209,8 +210,14 @@ def _remove_watchlist_item(product_id):
 
 def _send_chat_message(user_input: str):
     st.session_state[CHAT_MESSAGES_KEY].append({"role": "user", "content": user_input})
-    with st.spinner("Thinking..."):
-        reply = run_chat_turn(st.session_state[CHAT_SESSION_KEY], user_input)
+    if not os.getenv("OPENAI_API_KEY", "").strip():
+        reply = "Chat is unavailable: set `OPENAI_API_KEY` in your environment to enable the agent."
+    else:
+        try:
+            with st.spinner("Thinking..."):
+                reply = run_chat_turn(st.session_state[CHAT_SESSION_KEY], user_input)
+        except Exception as exc:
+            reply = f"Chat failed: {exc}"
     st.session_state[CHAT_MESSAGES_KEY].append({"role": "assistant", "content": reply})
 
 

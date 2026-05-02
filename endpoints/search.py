@@ -1,14 +1,9 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from typing import Any
 
 from tikhub_client import (
-    SAMPLE_LIVE_SEARCH_PAYLOAD,
-    SAMPLE_SEARCH_PRODUCTS_PAYLOAD,
-    SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2,
-    SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD,
     request_tikhub_json,
     request_tikhub_json_async,
 )
@@ -35,94 +30,85 @@ def _normalize_web_keyword_suggest_payload(payload):
 
 
 def fetch_live_search_result(keyword, offset=0, count=20, region="US"):
-    try:
-        _, payload = request_tikhub_json(
-            "/api/v1/tiktok/app/v3/fetch_live_search_result",
-            {"keyword": keyword, "offset": offset, "count": count, "region": region},
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_LIVE_SEARCH_PAYLOAD)
+    _, payload = request_tikhub_json(
+        "/api/v1/tiktok/app/v3/fetch_live_search_result",
+        {"keyword": keyword, "offset": offset, "count": count, "region": region},
+    )
+    return payload
 
 
 def fetch_search_word_suggestion(search_word, lang="en-US", region="US"):
-    try:
-        status_code, payload = request_tikhub_json(
-            "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
-            {"search_word": search_word, "lang": lang, "region": region},
-        )
-        if status_code == 200 and _shop_suggestion_payload_usable(payload):
-            return payload
+    status_code, payload = request_tikhub_json(
+        "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
+        {"search_word": search_word, "lang": lang, "region": region},
+    )
+    if status_code == 200 and _shop_suggestion_payload_usable(payload):
+        return payload
 
-        fallback_status, fallback_payload = request_tikhub_json(
-            "/api/v1/tiktok/web/fetch_search_keyword_suggest",
-            {"keyword": search_word, "region": region},
-        )
-        if fallback_status == 200:
-            normalized_payload = _normalize_web_keyword_suggest_payload(fallback_payload)
-            if _shop_suggestion_payload_usable(normalized_payload):
-                return normalized_payload
-    except Exception:
-        pass
-    return deepcopy(SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD)
+    fallback_status, fallback_payload = request_tikhub_json(
+        "/api/v1/tiktok/web/fetch_search_keyword_suggest",
+        {"keyword": search_word, "region": region},
+    )
+    if fallback_status == 200:
+        normalized_payload = _normalize_web_keyword_suggest_payload(fallback_payload)
+        if _shop_suggestion_payload_usable(normalized_payload):
+            return normalized_payload
+    raise RuntimeError(f"search keyword suggestion unavailable (status={status_code}, fallback_status={fallback_status})")
 
 
 def fetch_search_products_list(search_word, offset=0, page_token="", region="US"):
-    try:
-        _, payload = request_tikhub_json(
-            "/api/v1/tiktok/shop/web/fetch_search_products_list",
-            {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
+    _, payload = request_tikhub_json(
+        "/api/v1/tiktok/shop/web/fetch_search_products_list",
+        {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
+    )
+    return payload
 
 
 async def fetch_search_products_list_async(search_word, offset=0, page_token="", region="US", client=None):
-    try:
-        _, payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/shop/web/fetch_search_products_list",
-            {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
-            client=client,
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD)
+    _, payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/shop/web/fetch_search_products_list",
+        {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
+        client=client,
+    )
+    return payload
 
 
 def fetch_search_products_list_v2(search_word, offset=0, page_token="", region="US"):
-    try:
-        _, payload = request_tikhub_json(
-            "/api/v1/tiktok/shop/web/fetch_search_products_list_v2",
-            {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
-        )
-        return payload
-    except Exception:
-        return deepcopy(SAMPLE_SEARCH_PRODUCTS_PAYLOAD_V2)
+    _, payload = request_tikhub_json(
+        "/api/v1/tiktok/shop/web/fetch_search_products_list_v2",
+        {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
+    )
+    return payload
+
+
+async def fetch_search_products_list_v2_async(search_word, offset=0, page_token="", region="US", client=None):
+    _, payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/shop/web/fetch_search_products_list_v2",
+        {"search_word": search_word, "offset": offset, "page_token": page_token, "region": region},
+        client=client,
+    )
+    return payload
 
 
 async def fetch_search_word_suggestion_async(search_word, lang="en-US", region="US", client=None):
-    try:
-        status_code, payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
-            {"search_word": search_word, "lang": lang, "region": region},
-            client=client,
-        )
-        if status_code == 200 and _shop_suggestion_payload_usable(payload):
-            return payload
+    status_code, payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
+        {"search_word": search_word, "lang": lang, "region": region},
+        client=client,
+    )
+    if status_code == 200 and _shop_suggestion_payload_usable(payload):
+        return payload
 
-        fallback_status, fallback_payload = await request_tikhub_json_async(
-            "/api/v1/tiktok/web/fetch_search_keyword_suggest",
-            {"keyword": search_word, "region": region},
-            client=client,
-        )
-        if fallback_status == 200:
-            normalized_payload = _normalize_web_keyword_suggest_payload(fallback_payload)
-            if _shop_suggestion_payload_usable(normalized_payload):
-                return normalized_payload
-    except Exception:
-        pass
-    return deepcopy(SAMPLE_SEARCH_WORD_SUGGESTION_PAYLOAD)
+    fallback_status, fallback_payload = await request_tikhub_json_async(
+        "/api/v1/tiktok/web/fetch_search_keyword_suggest",
+        {"keyword": search_word, "region": region},
+        client=client,
+    )
+    if fallback_status == 200:
+        normalized_payload = _normalize_web_keyword_suggest_payload(fallback_payload)
+        if _shop_suggestion_payload_usable(normalized_payload):
+            return normalized_payload
+    raise RuntimeError(f"search keyword suggestion unavailable (status={status_code}, fallback_status={fallback_status})")
 
 
 def extract_search_pagination(payload: dict[str, Any]) -> tuple[bool, str]:

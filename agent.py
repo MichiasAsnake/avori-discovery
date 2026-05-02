@@ -7,15 +7,13 @@ from agents import Agent, Runner, SQLiteSession, function_tool
 
 from ai_judge import analyze_product, reject_non_finite_json_constant
 from avori_discovery import (
-    _extract_category_names,
-    _extract_detail_bonus_signals,
-    _extract_review_summary,
     refresh_tracked_watchlist,
     run_discovery as run_canonical_discovery,
     search_keyword_candidates,
 )
 from config import AGENT_MODEL, OUTPUT_DIR, REGION
 from endpoints.detail import fetch_product_detail
+from extractors import extract_category_names, extract_detail_bonus_signals, extract_review_summary
 from storage import list_watchlist_entries, record_watchlist_snapshot, remove_watchlist_entry, upsert_watchlist_entry
 
 
@@ -45,9 +43,9 @@ def get_product_detail(product_id: str) -> str:
     payload = {
         "product_id": product_id,
         "detail_endpoint": detail_endpoint,
-        "category_names": _extract_category_names(detail_payload, detail_endpoint),
-        "review_summary": _extract_review_summary(detail_payload, detail_endpoint),
-        "supplementary_signals": _extract_detail_bonus_signals(detail_payload, detail_endpoint),
+        "category_names": extract_category_names(detail_payload, detail_endpoint),
+        "review_summary": extract_review_summary(detail_payload, detail_endpoint),
+        "supplementary_signals": extract_detail_bonus_signals(detail_payload, detail_endpoint),
     }
     return json.dumps(payload, indent=2)
 

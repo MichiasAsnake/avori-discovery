@@ -15,40 +15,32 @@ from tikhub_client import SAMPLE_PRODUCT_DETAIL_PAYLOAD, SAMPLE_PRODUCT_DETAIL_V
 
 class EndpointFallbackTests(unittest.TestCase):
     @patch("endpoints.search.request_tikhub_json")
-    def test_fetch_live_search_result_falls_back_on_live_error(self, mock_request):
+    def test_fetch_live_search_result_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_live_search_result("travel organizer")
-
-        self.assertEqual(payload["data"]["status_code"], 0)
-        self.assertGreater(len(payload["data"]["data"]), 0)
+        with self.assertRaises(RuntimeError):
+            fetch_live_search_result("travel organizer")
 
     @patch("endpoints.search.request_tikhub_json")
-    def test_fetch_search_products_list_falls_back_on_live_error(self, mock_request):
+    def test_fetch_search_products_list_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_search_products_list("travel organizer")
-
-        self.assertEqual(payload["data"]["code"], 0)
-        self.assertGreater(len(payload["data"]["data"]["products"]), 0)
+        with self.assertRaises(RuntimeError):
+            fetch_search_products_list("travel organizer")
 
     @patch("endpoints.search.request_tikhub_json")
-    def test_fetch_search_products_list_v2_falls_back_on_live_error(self, mock_request):
+    def test_fetch_search_products_list_v2_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_search_products_list_v2("travel organizer")
-
-        self.assertEqual(payload["data"]["code"], 0)
-        self.assertGreater(len(payload["data"]["data"]["component_data"]["products"]), 0)
+        with self.assertRaises(RuntimeError):
+            fetch_search_products_list_v2("travel organizer")
 
     @patch("endpoints.search.request_tikhub_json")
-    def test_fetch_search_word_suggestion_falls_back_on_live_error(self, mock_request):
+    def test_fetch_search_word_suggestion_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_search_word_suggestion("travel")
-
-        self.assertEqual(payload["data"]["code"], 0)
-        self.assertGreater(len(payload["data"]["data"]), 0)
+        with self.assertRaises(RuntimeError):
+            fetch_search_word_suggestion("travel")
 
     @patch("endpoints.search.request_tikhub_json")
     def test_fetch_search_word_suggestion_uses_web_keyword_fallback_on_shop_400(self, mock_request):
@@ -90,30 +82,25 @@ class EndpointFallbackTests(unittest.TestCase):
         )
 
     @patch("endpoints.detail.request_tikhub_json")
-    def test_fetch_seller_products_list_falls_back_on_live_error(self, mock_request):
+    def test_fetch_seller_products_list_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_seller_products_list("seller-avori-1")
-
-        self.assertEqual(payload["data"]["code"], 0)
-        self.assertGreater(len(payload["data"]["data"]["products"]), 0)
+        with self.assertRaises(RuntimeError):
+            fetch_seller_products_list("seller-avori-1")
 
     @patch("endpoints.detail.request_tikhub_json")
-    def test_fetch_product_detail_v3_falls_back_on_live_error(self, mock_request):
+    def test_fetch_product_detail_v3_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_product_detail_v3("1729001")
-
-        self.assertIn("product_data", payload["data"])
+        with self.assertRaises(RuntimeError):
+            fetch_product_detail_v3("1729001")
 
     @patch("endpoints.detail.request_tikhub_json")
-    def test_fetch_product_detail_v4_falls_back_on_live_error(self, mock_request):
+    def test_fetch_product_detail_v4_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_product_detail_v4("1729001")
-
-        self.assertEqual(payload["data"]["code"], 0)
-        self.assertIn("categories", payload["data"]["data"]["global_data"]["product_info"])
+        with self.assertRaises(RuntimeError):
+            fetch_product_detail_v4("1729001")
 
     @patch("endpoints.trending.request_tikhub_json")
     def test_fetch_top_products_list_falls_back_on_live_error(self, mock_request):
@@ -124,12 +111,11 @@ class EndpointFallbackTests(unittest.TestCase):
         self.assertEqual(payload["data"]["code"], 50004)
 
     @patch("endpoints.detail.request_tikhub_json")
-    def test_fetch_showcase_product_list_falls_back_on_live_error(self, mock_request):
+    def test_fetch_showcase_product_list_raises_on_live_error(self, mock_request):
         mock_request.side_effect = RuntimeError("upstream 400")
 
-        payload = fetch_showcase_product_list("demo-kol-id")
-
-        self.assertEqual(payload["data"]["code"], 100000)
+        with self.assertRaises(RuntimeError):
+            fetch_showcase_product_list("demo-kol-id")
 
     @patch("endpoints.detail.request_tikhub_json")
     def test_fetch_product_detail_uses_v4_after_three_v3_400_responses(self, mock_request):

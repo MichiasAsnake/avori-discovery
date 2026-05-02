@@ -21,6 +21,7 @@ from agent import (
 from avori_discovery import run_discovery as run_canonical_discovery
 from config import OUTPUT_DIR
 from storage import create_discovery_job, get_discovery_job, update_discovery_job
+from tikhub_client import has_live_api_access, request_tikhub_json
 
 
 app = FastAPI(
@@ -327,10 +328,28 @@ def api_status():
 
 @app.get("/health")
 def health():
+    tikhub_status: dict[str, Any] = {
+        "has_api_key": has_live_api_access(),
+        "reachable": False,
+        "status_code": None,
+    }
+    if tikhub_status["has_api_key"]:
+        try:
+            status_code, _ = request_tikhub_json(
+                "/api/v1/tiktok/shop/web/fetch_search_word_suggestion",
+                {"search_word": "travel", "lang": "en-US", "region": "US"},
+                timeout=8.0,
+            )
+            tikhub_status["status_code"] = status_code
+            tikhub_status["reachable"] = status_code == 200
+        except Exception as exc:
+            tikhub_status["error"] = str(exc)
+
     return {
         "status": "ok",
         "data_dir": str(OUTPUT_DIR),
         "vercel": bool(os.getenv("VERCEL")),
+        "tikhub": tikhub_status,
     }
 
 

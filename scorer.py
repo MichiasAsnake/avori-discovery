@@ -58,4 +58,4 @@ def score_product(product):
 
 def rank_products(products):
     scored = [score_product(product) for product in products]
-    return sorted(scored, key=lambda product: product["score"], reverse=True)
+    return sorted(scored, key=lambda product: product["signal_score"], reverse=True)
