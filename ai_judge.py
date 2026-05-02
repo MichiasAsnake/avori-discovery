@@ -8,9 +8,10 @@ from typing import Any
 from signal_score import score_product_signal
 from utils import safe_float
 
-PROMPT_VERSION = "avori-product-judgment-v1"
+PROMPT_VERSION = "tiktok-judgment-v2"
 VALID_DECISIONS = {"skip", "watch", "deep_dive", "test_now"}
 DEFAULT_DECISION = "watch"
+
 
 def reject_non_finite_json_constant(value: str) -> None:
     raise ValueError(f"non-finite JSON value is not allowed: {value}")
@@ -63,43 +64,46 @@ def _signal(product: dict[str, Any]) -> dict[str, Any]:
     return score_product_signal(product)
 
 
-def _default_ideal_customer(product: dict[str, Any]) -> str:
-    title = str(product.get("title") or "this product").lower()
-    if any(keyword in title for keyword in ("purse", "bag", "tote")):
-        return "Women who want their daily bag to feel cleaner, easier to use, and more organized."
-    if any(keyword in title for keyword in ("makeup", "toiletry", "cosmetic")):
-        return "Travel and beauty buyers who want their routine visible, portable, and easy to pack."
-    if any(keyword in title for keyword in ("jewelry", "jewellery")):
-        return "Women who travel with small accessories and want to avoid tangled or lost jewelry."
-    if any(keyword in title for keyword in ("desk", "drawer", "vanity")):
-        return "Buyers who like simple visual resets for desks, vanities, bathrooms, or small spaces."
-    return "TikTok Shop buyers looking for a practical, easy-to-demonstrate product with clear everyday utility."
+def _build_product_angles(product: dict[str, Any]) -> list[str]:
+    """Generate TikTok content angles from product data, not hardcoded niches."""
+    title = str(product.get("title") or "").lower()
+    category_names = product.get("category_names") or []
 
-
-def _default_content_angles(product: dict[str, Any]) -> list[str]:
-    title = str(product.get("title") or "product").lower()
-    if any(keyword in title for keyword in ("purse", "bag", "tote")):
+    # Detect the product type dynamically
+    if any(w in title for w in ("packing cube", "luggage organiz")):
         return [
-            "What is in my bag, but organized",
-            "Before and after fixing a messy tote",
-            "Switch bags faster with one organizer insert",
+            "How I fit everything in one carry-on with packing cubes",
+            "Before/after: messy suitcase vs cubed packing system",
+            "Packing cubes that actually compress",
         ]
-    if any(keyword in title for keyword in ("makeup", "toiletry", "cosmetic")):
+    if any(w in title for w in ("purse", "bag insert", "tote organ")):
         return [
-            "Everything fits and stays visible",
-            "Pack my travel routine with me",
-            "Hotel bathroom setup in seconds",
+            "What's actually in my bag, but organized",
+            "Before/after: messy tote to clean setup",
+            "One organizer, every bag switch",
         ]
-    if any(keyword in title for keyword in ("jewelry", "jewellery")):
+    if any(w in title for w in ("toiletry", "makeup bag", "cosmetic")):
+        return [
+            "Everything fits and stays visible in one bag",
+            "Pack my full travel routine with me",
+            "Hotel counter setup in 30 seconds",
+        ]
+    if any(w in title for w in ("jewelry", "jewellery")):
         return [
             "No more tangled travel jewelry",
-            "Pack earrings, rings, and necklaces in one tiny case",
-            "Weekend trip jewelry reset",
+            "Weekend trip jewelry organized in 10 seconds",
         ]
+    if any(w in title for w in ("storage", "container", "box")):
+        return [
+            "Before/after: chaos to organized with one product",
+            "Small product that actually solves a daily problem",
+        ]
+
+    # Generic but useful TikTok hooks for any product
     return [
-        "Before and after organization demo",
-        "Problem-solution TikTok product demo",
-        "Why this small product makes daily life easier",
+        f"Watch how {title[:40]} solves a real problem",
+        "Before/after demo with this product",
+        "Why this simple product keeps selling out",
     ]
 
 
@@ -123,13 +127,12 @@ def build_product_judgment_prompt(product: dict[str, Any]) -> str:
     product_with_signal["product_signal"] = _signal(product)
     compact_product = json.dumps(product_with_signal, indent=2, sort_keys=True, allow_nan=False)
     return f"""
-You are Avori Discovery's product analyst. Judge whether a TikTok Shop product should be skipped, watched, deep-dived, or tested.
+You are a TikTok Shop product analyst. Judge whether a product should be skipped, watched, deep-dived, or tested now.
 
 Rules:
-- Optimize for products likely to sell on TikTok Shop.
-- Avori niche relevance is a bonus, not the whole decision.
-- Use the deterministic product_signal as evidence, but do not blindly copy it if qualitative risks are obvious.
-- Be concise and practical.
+- Optimize for products likely to sell on TikTok Shop, regardless of category.
+- Use the deterministic product_signal as evidence, but don't blindly copy it if qualitative risks are obvious.
+- Be concise and practical. Focus on market signals, not brand fit.
 - Return ONLY valid JSON. No markdown. No prose outside JSON.
 
 Allowed decision values: skip, watch, deep_dive, test_now.
@@ -138,7 +141,7 @@ Required JSON schema:
 {{
   "decision": "skip|watch|deep_dive|test_now",
   "confidence": 0.0,
-  "ideal_customer": "specific buyer segment",
+  "ideal_customer": "specific buyer segment this product appeals to",
   "why_it_might_sell": ["reason 1", "reason 2"],
   "content_angles": ["TikTok hook or demo angle 1", "TikTok hook or demo angle 2"],
   "risks": ["risk 1"],
@@ -163,7 +166,22 @@ def validate_product_judgment(
     if decision not in VALID_DECISIONS:
         decision = DEFAULT_DECISION
 
-    ideal_customer = str(payload.get("ideal_customer") or "").strip() or _default_ideal_customer(product)
+    # Build ideal_customer dynamically from product context instead of hardcoded
+    raw_ideal_customer = str(payload.get("ideal_customer") or "").strip()
+    if not raw_ideal_customer:
+        # Fallback: derive from title/category signal patterns
+        sold = product.get("sold_count", 0)
+        reviews = product.get("review_count", 0)
+        price = product.get("price", 0)
+        product_type = "practical, easy-to-demonstrate product"
+        if reviews <= 30 and sold >= 1000:
+            product_type = "early-window product with demand before mainstream awareness"
+        elif sold >= 5000:
+            product_type = "proven winner with strong market validation"
+        ideal_customer = f"TikTok Shop buyers seeking {product_type} with clear everyday utility at ~${price}"
+    else:
+        ideal_customer = raw_ideal_customer
+
     recommended_next_step = (
         str(payload.get("recommended_next_step") or "").strip()
         or str(product_signal.get("next_step") or "").strip()
@@ -183,7 +201,7 @@ def validate_product_judgment(
         ),
         "content_angles": _as_list(
             payload.get("content_angles"),
-            fallback=_default_content_angles(product),
+            fallback=_build_product_angles(product),
             limit=6,
         ),
         "risks": _as_list(
@@ -206,9 +224,7 @@ def _fallback_judgment(product: dict[str, Any], *, llm_error: str | None = None)
     payload = {
         "decision": product_signal.get("decision", DEFAULT_DECISION),
         "confidence": 0.72 if product_signal.get("final_score", 0) >= 65 else 0.62,
-        "ideal_customer": _default_ideal_customer(product),
         "why_it_might_sell": _fallback_why(product_signal),
-        "content_angles": _default_content_angles(product),
         "risks": _fallback_risks(product_signal),
         "recommended_next_step": product_signal.get("next_step"),
     }
