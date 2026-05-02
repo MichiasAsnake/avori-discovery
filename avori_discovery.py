@@ -219,11 +219,15 @@ async def _enrich_products_with_detail_async(products, use_sample_data=False):
             detail_endpoint, detail_payload = "product_detail_v3", deepcopy(SAMPLE_PRODUCT_DETAIL_V3_PAYLOAD)
             showcase_payloads = []
         else:
-            detail_endpoint, detail_payload = await fetch_product_detail_async(product_copy["product_id"], region=REGION, client=client)
-            creator_ids = extract_related_creator_ids(detail_payload, detail_endpoint)[:3]
-            showcase_payloads = []
-            for creator_id in creator_ids:
-                showcase_payloads.append(await fetch_showcase_product_list_async(creator_id, client=client))
+            try:
+                detail_endpoint, detail_payload = await fetch_product_detail_async(product_copy["product_id"], region=REGION, client=client)
+                creator_ids = extract_related_creator_ids(detail_payload, detail_endpoint)[:3]
+                showcase_payloads = []
+                for creator_id in creator_ids:
+                    showcase_payloads.append(await fetch_showcase_product_list_async(creator_id, client=client))
+            except RuntimeError:
+                # Detail API may be rate-limited; return product without enrichment
+                return product_copy
 
         bonus_signals = extract_detail_bonus_signals(detail_payload, detail_endpoint)
         creator_showcase_hits = max(

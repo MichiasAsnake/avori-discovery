@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from tikhub_client import (
@@ -21,21 +22,27 @@ def fetch_seller_products_list(seller_id, search_params="", region="US"):
 
 
 async def fetch_product_detail_async(product_id, region="US", client=None):
-    status_code, payload = await request_tikhub_json_async(
-        "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
-        {"product_id": product_id, "region": region},
-        timeout=DETAIL_TIMEOUT,
-        client=client,
-    )
+    # TikHub v3 detail returns 400 for async httpx requests but works for sync.
+    # Run sync call inside executor to avoid blocking the event loop.
+    import concurrent.futures
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        status_code, payload = await loop.run_in_executor(
+            pool, request_tikhub_json,
+            "/api/v1/tiktok/shop/web/fetch_product_detail_v3",
+            {"product_id": product_id, "region": region},
+            DETAIL_TIMEOUT,
+        )
     if status_code == 200 and _has_v3_detail_data(payload):
         return "product_detail_v3", payload
 
-    fallback_status, fallback_payload = await request_tikhub_json_async(
-        "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
-        {"product_id": product_id, "region": region},
-        timeout=DETAIL_TIMEOUT,
-        client=client,
-    )
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        fallback_status, fallback_payload = await loop.run_in_executor(
+            pool, request_tikhub_json,
+            "/api/v1/tiktok/app/v3/fetch_product_detail_v4",
+            {"product_id": product_id, "region": region},
+            DETAIL_TIMEOUT,
+        )
     if fallback_status == 200 and _has_v4_detail_data(fallback_payload):
         return "product_detail_v4", fallback_payload
     raise RuntimeError(
@@ -131,9 +138,13 @@ def fetch_showcase_product_list(kol_id, count=20, next_scroll_param=""):
 
 
 async def fetch_showcase_product_list_async(kol_id, count=20, next_scroll_param="", client=None):
-    _, payload = await request_tikhub_json_async(
-        "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
-        {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
-        client=client,
-    )
+    import concurrent.futures
+    loop = asyncio.get_running_loop()
+    with concurrent.futures.ThreadPoolExecutor() as pool:
+        _, payload = await loop.run_in_executor(
+            pool, request_tikhub_json,
+            "/api/v1/tiktok/app/v3/fetch_creator_showcase_product_list",
+            {"kol_id": kol_id, "count": count, "next_scroll_param": next_scroll_param},
+            35.0,
+        )
     return payload
