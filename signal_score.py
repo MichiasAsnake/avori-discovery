@@ -119,6 +119,12 @@ def score_content_potential(product: dict) -> float:
     text = _combined_text(product)
     demo_hits = sum(1 for keyword in DEMO_KEYWORDS if keyword in text)
     demo_score = min(demo_hits * 1.5, 6)
+    # When detail is unenriched, give credit if the title itself is content-heavy
+    # (words like "how to", "review", "viral", "tiktok", "asmr" in title)
+    if video_score <= 0:
+        text_lower = text.lower()
+        if any(w in text_lower for w in ("how to", "review", "viral", "tiktok", "asmr", "test", "unboxing")):
+            video_score += 2.5
     return _rounded(_clamp(video_score + demo_score, 0, 15))
 
 
@@ -160,6 +166,11 @@ def score_seller_signal(product: dict) -> float:
         score += 2
     elif catalog_count > 250:
         score -= 2
+    # When detail is unenriched but seller name exists, give baseline credit
+    # for being a real shop (not anonymous/mass seller)
+    seller_name = (product.get("seller_name") or "").lower()
+    if not follower_count and not review_count and seller_name and seller_name != "unknown":
+        score = max(score, 1.0)
     return _rounded(_clamp(score, 0, 10))
 
 

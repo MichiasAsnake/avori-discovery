@@ -224,8 +224,11 @@ async def _enrich_products_with_detail_async(products, use_sample_data=False):
                 creator_ids = extract_related_creator_ids(detail_payload, detail_endpoint)[:3]
                 showcase_payloads = []
                 for creator_id in creator_ids:
-                    showcase_payloads.append(await fetch_showcase_product_list_async(creator_id, client=client))
-            except RuntimeError:
+                    try:
+                        showcase_payloads.append(await fetch_showcase_product_list_async(creator_id, client=client))
+                    except (RuntimeError, Exception):
+                        pass  # Skip individual showcase if rate-limited
+            except (RuntimeError, Exception):
                 # Detail API may be rate-limited; return product without enrichment
                 return product_copy
 
@@ -248,7 +251,9 @@ async def _enrich_products_with_detail_async(products, use_sample_data=False):
         return [await enrich_product(product) for product in products]
 
     async with httpx.AsyncClient() as client:
-        semaphore = asyncio.Semaphore(DETAIL_CONCURRENCY)
+        # Use lower concurrency (3) to avoid rate-limiting during enrichment
+        detail_concurrency = min(DETAIL_CONCURRENCY, 3)
+        semaphore = asyncio.Semaphore(detail_concurrency)
 
         async def limited_enrich(product):
             async with semaphore:
